@@ -1,12 +1,16 @@
-use std::sync::{Arc, Mutex, Condvar, RwLock};
+use std::sync::{Arc, Mutex, Condvar, RwLock, Barrier};
 use std::thread;
 
 fn main() {
-    // test for Mutex
+    // Test for Mutex
     let mutex_shared = Arc::new(Mutex::new(0)); 
-    // teset for Condvar
+    // Test for Condvar
     let condvar_shared = Arc::new((Mutex::new(false), Condvar::new()));
+    // Test for RW Lock
     let rwlock_shared = RwLock::new(0);
+    // Test for Barrier Sync
+    // Given size represents number of threads
+    let barrier_shared = Arc::new(Barrier::new(3)); 
     // No limit on read
     // Read-lock will release when out-of-scope
     {
@@ -18,14 +22,19 @@ fn main() {
     {
         let mut v = rwlock_shared.write().unwrap();
         *v = 1;
+        println!("Write to {}", v);
     }
     let mut handle: Vec<thread::JoinHandle<()>> = vec![];
     for i in 0..3 {
         let mutex_shared = mutex_shared.clone();
         let condvar_shared = condvar_shared.clone();
+        let barrier_shared = barrier_shared.clone();
         let th = thread::spawn(move || {
             increase_by_one(mutex_shared);
             child(i as u8, condvar_shared);
+            println!("Before wait!");
+            barrier_shared.wait();
+            println!("After wait!");
         });
         handle.push(th);
     }
