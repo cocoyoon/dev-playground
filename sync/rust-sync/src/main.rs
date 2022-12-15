@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, Condvar};
+use std::sync::{Arc, Mutex, Condvar, RwLock};
 use std::thread;
 
 fn main() {
@@ -6,6 +6,19 @@ fn main() {
     let mutex_shared = Arc::new(Mutex::new(0)); 
     // teset for Condvar
     let condvar_shared = Arc::new((Mutex::new(false), Condvar::new()));
+    let rwlock_shared = RwLock::new(0);
+    // No limit on read
+    // Read-lock will release when out-of-scope
+    {
+        let v1 = rwlock_shared.read().unwrap();
+        let v2 = rwlock_shared.read().unwrap();
+        println!("v1:{}, v2:{}", v1, v2);
+    }
+    // Write
+    {
+        let mut v = rwlock_shared.write().unwrap();
+        *v = 1;
+    }
     let mut handle: Vec<thread::JoinHandle<()>> = vec![];
     for i in 0..3 {
         let mutex_shared = mutex_shared.clone();
