@@ -1,5 +1,5 @@
 
-use std::{sync::{Mutex, Condvar}, ops::Add};
+use std::sync::{Mutex, Condvar};
 
 #[derive(Debug)]
 pub struct SemaPhore {
@@ -17,20 +17,20 @@ impl SemaPhore {
         }
     }
 
-    pub fn increase_or_wait(&mut self) {
+    pub fn increase_or_wait(&self) {
         let mut cnt = self.thread_cnt.lock().unwrap();
-        // Wait when thread count 
+        // Wait until less than max
         while *cnt >= self.thread_max {
             cnt = self.cond.wait(cnt).unwrap();
         }
         *cnt += 1;
     }
 
-    pub fn decrease_or_notify(&mut self) {
+    pub fn decrease_or_notify(&self) {
         let mut cnt = self.thread_cnt.lock().unwrap();
         *cnt -= 1;
-        // Wake one each thread
-        while *cnt <= self.thread_max {
+        // Wake one waiting thread
+        if *cnt <= self.thread_max {
             self.cond.notify_one();
         }
     }
