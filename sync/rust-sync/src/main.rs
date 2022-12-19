@@ -1,5 +1,19 @@
+use std::{
+    thread,
+    sync::atomic::{AtomicUsize, Ordering::SeqCst}
+};
 use std::sync::{Arc, Mutex, Condvar, RwLock, Barrier};
-use std::thread;
+
+mod semaphore;
+use semaphore::*;
+
+mod channel;
+use channel::create_channel;
+
+const SEM_COUNT: usize = 4;
+const THREAD_COUNT: usize = 8;
+const LOOP_COUNT: usize = 10000;
+static mut ATOMIC_CNT: AtomicUsize = AtomicUsize::new(0);
 
 fn main() {
     // Test for Mutex
@@ -45,7 +59,62 @@ fn main() {
         th.join().unwrap(); // wait until thread is done its task
     }
     p.join().unwrap();
+    // Test for semaphore
     assert_eq!(*mutex_shared.lock().unwrap(), 3);
+
+    let semaphore_shared = Arc::new(SemaPhore::new(SEM_COUNT as i32));
+    let mut thread_handle = Vec::new();
+    {
+        for i in 0..THREAD_COUNT {
+            let s = semaphore_shared.clone();
+            let th = thread::spawn(move || {
+                for _ in 0..LOOP_COUNT {
+                    // Increase reference count or wait until notify
+                    s.increase_or_wait();
+
+                    unsafe { ATOMIC_CNT.fetch_add(1, SeqCst) };
+                    let n = unsafe { ATOMIC_CNT.load(SeqCst) };
+                    println!("Thread #{}, Atomic count #{}", i, n);
+                    assert!(n <= SEM_COUNT);
+                    unsafe { ATOMIC_CNT.fetch_sub(1, SeqCst) };
+
+                    // Decrase reference count and notify to thread that waits
+                    s.decrease_or_notify();
+                }
+            });
+            thread_handle.push(th);
+        }
+
+        for th in thread_handle {
+            th.join().unwrap();
+        }
+        
+        let (tx, rx) = create_channel(4);
+        let mut v = Vec::new();
+        // For receiver thread
+        let th = thread::spawn(move || {
+            let mut cnt = 0;
+            while cnt < THREAD_COUNT * LOOP_COUNT {
+                let data = rx.recv();
+                print!("Data received! {:?}", data);
+                cnt += 1;
+            }
+        });
+        v.push(th);
+        for i in 0..THREAD_COUNT {
+            let tx = tx.clone();
+            let th = thread::spawn(move || {
+                for j in 0..LOOP_COUNT {
+                    tx.send((i,j))
+                }
+            });
+            v.push(th);
+        }
+
+        for th in v {
+            th.join().unwrap();
+        }
+    }
 }
 
 fn increase_by_one(shared: Arc<Mutex<i32>>) {
